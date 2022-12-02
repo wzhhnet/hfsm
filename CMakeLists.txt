@@ -20,8 +20,8 @@ SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR})
 set(GTEST_PATH ${SRC_PATH}/test/gtest)
-include_directories(${SRC_PATH})
-aux_source_directory(. SRC_LIBS)
+include_directories(${SRC_PATH}/src)
+aux_source_directory(./src SRC_LIBS)
 
 if (BUILD_TEST)
 include_directories(${GTEST_PATH})
