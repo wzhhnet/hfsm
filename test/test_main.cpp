@@ -53,3 +53,8 @@ GTEST_API_ int main(int argc, char **argv)
     return RUN_ALL_TESTS();
 }
 
+TEST(hfsm, hfsm_new_state)
+{
+    ASSERT_NE(ghfsm, nullptr);
+}
+
