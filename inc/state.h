@@ -1,5 +1,5 @@
 /*
- * Unit test for HFSM
+ * Hierarchical finite state machine
  *
  * Author wanch
  * Date 2021/12/23
@@ -18,38 +18,32 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
+#ifndef _HFSM_STATE_H
+#define _HFSM_STATE_H
 
-#include <unistd.h>
-#include <gtest/gtest.h>
-#include <hfsm.c>
+#include "event_hub.h"
 
-hfsm_handle ghfsm = NULL;
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define HFSM_MAX_STATES     (64)
+typedef unsigned char state_id;
+typedef struct action_t {
+    void (*entry)(void* /*!< userdata */);
+    void (*exit)(void* /*!< userdata */);
+    state_id (*process)(const event_t* /*!< event */, void* /*!< userdata */);
+} action_t;
+
+typedef struct state_t {
+    state_id id;
+    struct state_t *parent;
+    struct action_t action;
+} state_t;
 
 
-class GlobalTest : public testing::Environment
-{
-  public:
-    virtual void SetUp()
-    {
-        hfsm_param param = {
-            .max_states = 4,
-            .userdata = NULL
-        };
-
-        hfsm_create(&ghfsm, &param);
-    }
-
-    virtual void TearDown()
-    {
-        hfsm_destroy(ghfsm);
-    }
-
-};
-
-GTEST_API_ int main(int argc, char **argv)
-{
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+#ifdef __cplusplus
 }
+#endif
 
+#endif /*! _HFSM_STATE_H */

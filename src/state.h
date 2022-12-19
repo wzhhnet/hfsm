@@ -1,47 +1,46 @@
-/********** Copyright(C) 2021 MXNavi Co.,Ltd. ALL RIGHTS RESERVED **********/
-/****************************************************************************
-*   FILE NAME   : state.h
-*   CREATE DATE : 2021-12-16
-*   MODULE      :
-*   AUTHOR      : wanch
-*---------------------------------------------------------------------------*
-*   MEMO        :
-*****************************************************************************/
+/*
+ * State interface for C users
+ *
+ * Author wanch
+ * Date 2021/12/23
+ * Email wzhhnet@gmail.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #ifndef _HFSM_STATE_H
 #define _HFSM_STATE_H
+
+#include "event_hub.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/****************************************************************************
-*                       Include File Section                                *
-*****************************************************************************/
 
-
-/****************************************************************************
-*                       Macro Definition Section                            *
-*****************************************************************************/
 #define HFSM_MAX_STATES     (64)
-#define HFSM_STATE_SIZE          (128)
+typedef unsigned char state_id;
+typedef struct action_t {
+    void (*entry)(void* /*!< userdata */);
+    void (*exit)(void* /*!< userdata */);
+    state_id (*process)(const event_t* /*!< event */, void* /*!< userdata */);
+} action_t;
 
-typedef void* state_handle;
-typedef bool (*traverse_fn)(hfsm_state*, void*);
+typedef struct state_t {
+    state_id id;
+    struct state_t *parent;
+    struct action_t action;
+} state_t;
 
-typedef struct traverse_t {
-    traverse_fn func;
-    void *arg;
-} traverse;
-
-int state_create(state_handle *handle);
-int state_destroy(state_handle handle);
-int state_add(state_handle handle, hfsm_state *parent, hfsm_state *pstate);
-int state_set(state_handle handle, uint32_t key);
-hfsm_state* state_find(state_handle handle, uint32_t key);
-hfsm_state* state_get(state_handle handle);
-hfsm_state* state_parent(state_handle handle, hfsm_state *pstate);
-hfsm_state* state_forefathers(state_handle handle, hfsm_state *p1, hfsm_state *p2);
-hfsm_state* state_root(state_handle handle);
-int state_downward(state_handle handle, hfsm_state *src, hfsm_state *dst, traverse *tra);
 
 #ifdef __cplusplus
 }

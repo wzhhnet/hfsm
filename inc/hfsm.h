@@ -1,0 +1,117 @@
+/*
+ * Hierarchical finite state machine
+ *
+ * Author wanch
+ * Date 2021/12/23
+ * Email wzhhnet@gmail.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef HIERARCHICAL_FINITE_STATE_MACHINE_H
+#define HIERARCHICAL_FINITE_STATE_MACHINE_H
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+#include "state.h"
+
+
+#define MODULE_NAME_HFSM        "HFSM"
+#define HFSM_STATE_NAME_LEN     (64)
+#define MESSAGE_PAYLOAD_LEN     (512)
+
+#define HFSM_EVENT_USR_BASE EVENT_ID_USER_BASE
+
+enum error_code {
+    HFSM_SUCC           = UTILS_SUCC,
+    HFSM_ERR_MALLOC     = UTILS_ERR_MALLOC,
+    HFSM_ERR_NULLPTR    = UTILS_ERR_PTR,
+    HFSM_ERR_ALLOCATOR,
+    HFSM_ERR_NO_STATE,
+    HFSM_ERR_EVTHUB,
+};
+
+typedef void* hfsm_handle;
+
+typedef struct {
+    unsigned char max_states;
+    void *userdata;
+} hfsm_param;
+
+/**
+  *    @brief create HFSM
+  *
+  *    create HFSM
+  *    @param[in]  pstFsmAttr: attribute of HFSM
+  *    @param[out]  phfsm: point of FHSM handle
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_create(hfsm_handle *hfsm, hfsm_param *param);
+
+/**
+  *    @brief destroy HFSM
+  *
+  *    destroy HFSM
+  *    @param[in]  hfsm handle
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_destroy(hfsm_handle hfsm);
+
+/**
+  *    @brief start HFSM
+  *
+  *    start HFSM
+  *    @param[in]  hfsm handle
+  *    @param[in]  id initial state identifier
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_start(hfsm_handle hfsm, state_id id);
+
+/**
+  *    @brief add state
+  *
+  *    add state for HFSM
+  *    @param[in]  hfsm: point of FHSM handle
+  *    @param[in]  state: state to add
+  *    @param[in]  parent: parent of state to add
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_add_state(hfsm_handle hfsm, state_t *s);
+
+/**
+  *    @brief send an asynchronous message
+  *
+  *    send an asynchronous message to HFSM
+  *    @param[in]  hfsm: point of FHSM handle
+  *    @param[in]  msg: message point to send
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_send_event(hfsm_handle hfsm, event_t *e);
+
+/**
+  *    @brief allocate a new state by HFSM
+  *
+  *    allocate a new state by HFSM
+  *    @param[in]  hfsm: point of FHSM handle
+  *    @return     pointer of state_t, NULL if failed
+  */
+state_t* hfsm_new_state(hfsm_handle hfsm);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif
+

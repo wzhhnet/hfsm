@@ -1,369 +1,252 @@
-/********** Copyright(C) 2021 MXNavi Co.,Ltd. ALL RIGHTS RESERVED **********/
-/****************************************************************************
-*   FILE NAME   : hfsm.h
-*   CREATE DATE : 2021-12-16
-*   MODULE      :
-*   AUTHOR      : wanch
-*---------------------------------------------------------------------------*
-*   MEMO        :
-*****************************************************************************/
+/*
+ * Hierarchical finite state machine
+ *
+ * Author wanch
+ * Date 2021/12/23
+ * Email wzhhnet@gmail.com
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <allocator.h>
+#include <event_hub.h>
+
 #include "log.h"
 #include "hfsm.h"
-#include "state.h"
-#include "message.h"
-#include <pthread.h>
+
+
 
 #define MAX_MESSAGE_NUM     (64)
-#define EXIT_THREAD  (1)
 
 enum hfsm_msg_e {
-    HFSM_SYS_START,
-    HFSM_SYS_STOP,
-    HFSM_USER
+    HFSM_SYS_START  = EVENT_ID_SYS_BASE+1,
+    HFSM_SYS_STOP   = EVENT_ID_SYS_BASE+2,
 };
 
 struct hfsm_sys_t {
-    uint32_t what;
-    int32_t arg1;
-    int32_t arg2;
+    unsigned int what;
+    int arg1;
+    int arg2;
 };
 
-struct hfsm_thread_t {
-    int exit;
-    pthread_t id;
+struct state_info_t {
+    struct listnode node;
+    struct state_t state;
 };
+
+ALLOCATOR_DECLARE(state, struct state_info_t);
+ALLOCATOR_IMPLEMENT(state, struct state_info_t);
 
 struct hfsm_t {
-    que_handle msg_handle;
-    state_handle sta_handle;
-    uint32_t cur_state;     /*!< 0 as default */
-    struct hfsm_thread_t thread;
+    evthub_t evthub;
+    void *user_data;
+    struct state_t *cur_state;
+    struct listnode state_list;
+    ALLOCATOR_DEFINE(state, pool);
 };
 
-static bool hfsm_transit_cb(hfsm_state* pstate, void* arg) {
-
-    int ret;
-    if (!pstate)
-        return false;
-
-    ret = pstate->enter(pstate->argv);
-    if (ret != HFSM_OK)
-        return false;
-
-    return true;
-}
-
-static void hfsm_invoke_transit(
-    struct hfsm_t *phfsm, hfsm_state *src, hfsm_state *dst) {
-
-    int ret;
-    hfsm_state *pstate, *s;
-    traverse tra_param = {};
-
-    if (!phfsm || !dst)
-        return;
-
-    if (!src) {
-        pstate = state_root(phfsm->sta_handle);
-    } else {
-        pstate = state_forefathers(
-            phfsm->sta_handle, src, dst);
-    }
-
-    if (!pstate)
-        goto err;
-
-    /*! exit original state to forefathers */
-    s = src;
-    while (s && s->stateID != pstate->stateID) {
-        ret = s->exit(s->argv);
-        if (ret != HFSM_OK)
-            goto err;
-        s = state_parent(phfsm->sta_handle, s);
-        if (ret != HFSM_OK)
-            goto err;
-    }
-
-    /*! enter destination state from forefathers */
-    tra_param.func = hfsm_transit_cb;
-    tra_param.arg = (void*)phfsm;
-    ret = state_downward(
-        phfsm->sta_handle, pstate, dst, &tra_param);
-    if (ret == HFSM_OK) {
-        ret = state_set(phfsm->sta_handle, dst->stateID);
-        if (ret == HFSM_OK)
-            return;
-    }
-
-err:
-    LOGE("%s failed errcode = %d", __FUNCTION__, ret);
-}
-
-static void hfsm_state_transit(
-    struct hfsm_t *phfsm, uint32_t stateid) {
-
-    int ret;
-    hfsm_state *tar, *cur;
-
-    if (!phfsm)
-        return;
-
-    /*! find target state */
-    tar = state_find(phfsm->sta_handle, stateid);
-    if (!tar)
-        return;
-
-    /*! find current state */
-    cur = state_get(phfsm->sta_handle);
-    if (cur) {
-        if (tar->stateID != cur->stateID) {
-            hfsm_invoke_transit(phfsm, cur, tar);
-        } else {
-            /*! no need transition */
-            LOGD("%s no transition");
-        }
-    } else {
-        hfsm_invoke_transit(phfsm, NULL, tar);
-    }
-}
-
-static void hfms_msg_process(
-    struct hfsm_t *phfsm, hfsm_message *msg) {
-
-    int ret;
-    int msg_rc = HFSM_PROC_MSG_UNHANDLER;
-    hfsm_state *pstate;
-
-    /*! get current state */
-    pstate = state_get(phfsm->sta_handle);
-
-    /*! process message on proper state */
-    while (pstate) {
-        uint32_t state_id = pstate->stateID;
-
-        /*! process message on current state */
-        msg_rc = pstate->process(msg, pstate->argv, &state_id);
-        if (msg_rc == HFSM_PROC_MSG_UNHANDLER) {
-            /*! process message on parent state */
-            pstate = state_parent(phfsm->sta_handle, pstate);
-        } else {
-            if (pstate->stateID != state_id) {
-                phfsm->cur_state = state_id;
-                /*! try to transition before next message process */
-                hfsm_state_transit(phfsm, phfsm->cur_state);
-            }
+static state_t* hfsm_find_state(struct hfsm_t *handle, state_id id)
+{
+    state_t* s = NULL;
+    struct listnode *n;
+    struct state_info_t *info;
+    list_for_each(n, &handle->state_list) {
+        info = list_entry(n, struct state_info_t, node);
+        if (info->state.id == id) {
+            s = &info->state;
             break;
         }
     }
+
+    return s;
 }
 
-static void *hfsm_loop(void *arg) {
-    if (arg == NULL) goto exit;
+static void hfsm_state_transit(struct hfsm_t *handle, state_id id)
+{
+    const int MAX_LEVEL = 64;
+    state_t *from[MAX_LEVEL], *to[MAX_LEVEL], *tmp, *target = NULL;
+    int from_sum = 0, to_sum = 0;
 
-    bool actived = false;
-    struct hfsm_t* phfsm = (struct hfsm_t*)arg;
-    struct hfsm_thread_t* thread = &phfsm->thread;
+    RETURN_IF_TRUE(id == handle->cur_state->id,);
 
-    while (!thread->exit) {
-        message m = {};
-        LOGD("waiting for message ...");
+    /*! find target state information */
+    target = hfsm_find_state(handle, id);
+    RETURN_IF_NULL(target,);
 
-        /*! thread hangs if queue is empty */
-        queue_wait(phfsm->msg_handle);
-        LOGD("message is comming");
+    /*! fetch all parents of current state */
+    tmp = handle->cur_state;
+    while (tmp) {
+        from[from_sum++] = tmp;
+        tmp = tmp->parent;
+    }
 
-        /*! do message if anyone pushed it to queue */
-        queue_pop(phfsm->msg_handle, &m);
-        if (m.type == HFSM_SYS_START) {
-            hfsm_state_transit(phfsm, phfsm->cur_state);
-            actived = true;
-        } else if (m.type == HFSM_SYS_STOP) {
-            actived = false;
-        } else if (m.type == HFSM_USER) {
-            if (actived) {
-                hfsm_message *cur_msg = (hfsm_message*)m.payload;
-                /*! process message on proper state */
-                hfms_msg_process(phfsm, cur_msg);
-            }
+    /*! fetch all parents of target state */
+    tmp = target;
+    while (tmp) {
+        to[to_sum++] = tmp;
+        tmp = tmp->parent;
+    }
+
+    /*! remove the common tail */
+    while (from_sum > 0 && to_sum > 0
+        && from[from_sum-1] == to[to_sum-1]) {
+        --from_sum;
+        --to_sum;
+    }
+
+    /*! invoke exit action */
+    for (int i=0; i<from_sum; ++i) {
+        if (from[i]->action.exit) {
+            from[i]->action.exit(handle->user_data);
         }
     }
 
-    return NULL; /*!< exit normaly */
-
-exit:
-
-    return NULL;
-}
-
-int hfsm_create(hfsm_handle *hfsm) {
-
-    int ret;
-    struct hfsm_t* phfsm = (struct hfsm_t*)malloc(sizeof(struct hfsm_t));
-    if (!phfsm)
-        return HFSM_ERR_MALLOC;
-
-    memset(phfsm, 0, sizeof(struct hfsm_t));
-
-    /*! create message handler */
-    queue_create(MAX_MESSAGE_NUM, &phfsm->msg_handle);
-    if (!phfsm->msg_handle) {
-        ret = HFSM_ERR_MSG_HANDLE;
-        goto err;
+    /*! invoke entry action */
+    for (int i=to_sum; i>0; --i) {
+        if (to[i-1]->action.entry) {
+            to[i-1]->action.entry(handle->user_data);
+        }
     }
 
-    /*! create state handler */
-    ret = state_create(&phfsm->sta_handle);
-    if (HFSM_OK != ret)
-        goto err;
+    /*! state transition */
+    handle->cur_state = target;
+}
 
-    /*! create hfsm thread */
-    ret = pthread_create(
-        &phfsm->thread.id, 0, hfsm_loop, (void*)phfsm);
-    if (ret) {
-        ret = HFSM_ERR_THREAD;
-        goto err;
+static void hfsm_event_invoke(const event_t *evt, void *userdata)
+{
+    struct hfsm_t *handle = (struct hfsm_t*)userdata;
+    RETURN_IF_NULL(evt,);
+    RETURN_IF_NULL(userdata,);
+
+    if (evt->id == HFSM_SYS_START) {
+        handle->cur_state = (state_t*)userdata;
+        if (handle->cur_state->action.entry) {
+            handle->cur_state->action.entry(handle->user_data);
+        }
+    } else if (handle->cur_state) {
+        state_t *s = handle->cur_state;
+        if (s->action.process) {
+            state_id id = s->action.process(evt, handle->user_data);
+            if (id != handle->cur_state->id) {
+                hfsm_state_transit(handle, id);
+            }
+        }
     }
-
-    *hfsm = (hfsm_handle)phfsm;
-    return HFSM_OK;
-
-err:
-    if (phfsm)
-        free(phfsm);
-    LOGE("%s failed", __FUNCTION__);
-    return ret;
 }
 
-int hfsm_destroy(hfsm_handle hfsm) {
+state_t* hfsm_new_state(hfsm_handle hfsm)
+{
+    struct hfsm_t *handle;
+    struct state_info_t *info;
 
-    int ret;
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
+    RETURN_IF_NULL(hfsm, NULL);
+    handle = (struct hfsm_t*)hfsm;
 
-    if (!phfsm)
-        return HFSM_ERR_NULLPTR;
+    info = ALLOCATOR_ALLOC(state, &handle->pool);
+    RETURN_IF_NULL(info, NULL);
 
-    phfsm->thread.exit = EXIT_THREAD;
-    ret = pthread_cancel(phfsm->thread.id);
-    if (ret) {
-        ret = HFSM_ERR_THREAD;
-        goto exit;
+    return &info->state;
+}
+
+int hfsm_create(hfsm_handle *hfsm, hfsm_param *param)
+{
+    int s;
+    struct hfsm_t *handle;
+    RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
+    RETURN_IF_NULL(param, HFSM_ERR_NULLPTR);
+    handle = (struct hfsm_t*)malloc(sizeof(struct hfsm_t));
+    RETURN_IF_NULL(handle, HFSM_ERR_MALLOC);
+
+    s = ALLOCATOR_CREATE(state, &handle->pool, param->max_states);
+    RETURN_IF_FAIL(s, HFSM_ERR_ALLOCATOR);
+
+    handle->user_data = param->userdata;
+    handle->cur_state = NULL;
+    list_init(&handle->state_list);
+    *hfsm = (hfsm_handle)handle;
+    return HFSM_SUCC;
+}
+
+int hfsm_destroy(hfsm_handle hfsm)
+{
+    struct hfsm_t *handle;
+    struct listnode *c, *n;
+    struct state_info_t *info;
+    RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
+    handle = (struct hfsm_t*)hfsm;
+
+    list_for_each_safe(c, n, &handle->state_list) {
+        info = list_entry(c, struct state_info_t, node);
+        list_remove(c);
+        ALLOCATOR_FREE(state, &handle->pool, info);
     }
-
-    ret = pthread_join(phfsm->thread.id, 0);
-    if (ret) {
-        ret = HFSM_ERR_THREAD;
-        goto exit;
-    }
-
-    ret = HFSM_OK;
-
-exit:
-
-    if (phfsm) {
-        queue_destroy(phfsm->msg_handle);
-        state_destroy(phfsm->sta_handle);
-        free((void*)phfsm);
-    }
-
-    return ret;
+    ALLOCATOR_DESTORY(state, &handle->pool);
+    return HFSM_SUCC;
 }
 
-int hfsm_add_state(hfsm_handle hfsm, hfsm_state *target, hfsm_state *parent) {
+int hfsm_start(hfsm_handle hfsm, state_id id)
+{
+    int s;
+    state_t *p;
+    struct hfsm_t *handle;
+    RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
+    handle = (struct hfsm_t*)hfsm;
 
-    int ret = HFSM_OK;
-    hfsm_state *p;
-    struct treenode* found;
-
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
-    if (!phfsm || !target)
-        return HFSM_ERR_NULLPTR;
-
-    if (sizeof(hfsm_state) > HFSM_STATE_SIZE)
-        return HFSM_ERR_STATE_SIZE_OVERFLOW;
-
-    if (parent) {
-        p = state_find(phfsm->sta_handle, parent->stateID);
-        if (!p)
-            goto err;
-
-        ret = state_add(phfsm->sta_handle, parent, target);
-        if (HFSM_OK != ret)
-            goto err;
-    } else {
-        ret = state_add(phfsm->sta_handle, NULL, target);
-        if (HFSM_OK != ret)
-            goto err;
-    }
-
-err:
-    return ret;
+    evthub_parm param = {
+        .max = MAX_MESSAGE_NUM,
+        .mode = EVENT_HUB_MODE_PRIORITY,
+        .user_data = (void*)handle,
+        .notifier = hfsm_event_invoke
+    };
+    p = hfsm_find_state(handle, id);
+    RETURN_IF_NULL(p, HFSM_ERR_NO_STATE);
+    s = evthub_create(&handle->evthub, &param);
+    RETURN_IF_FAIL(s, HFSM_ERR_EVTHUB);
+    event_t evt = {
+        .id = HFSM_SYS_START,
+        .priority = 0xFF,
+        .param = (void*)p
+    };
+    s = evthub_send(handle->evthub, &evt);
+    RETURN_IF_FAIL(s, HFSM_ERR_EVTHUB);
+    return HFSM_SUCC;
 }
 
-int hfsm_set_init_state(hfsm_handle hfsm, uint32_t stateid) {
+int hfsm_add_state(hfsm_handle hfsm, state_t *s)
+{
+    struct hfsm_t *handle;
+    struct state_info_t *info;
+    RETURN_IF_NULL(s, HFSM_ERR_NULLPTR);
+    RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
+    handle = (struct hfsm_t*)hfsm;
 
-    int ret;
-    struct treenode* found;
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
-
-    if (!phfsm)
-        return HFSM_ERR_NULLPTR;
-
-    phfsm->cur_state = stateid;
-    return HFSM_OK;
+    info = container_of(s, struct state_info_t, state);
+    RETURN_IF_NULL(info, HFSM_ERR_ALLOCATOR);
+    list_add_tail(&handle->state_list, &info->node);
+    return HFSM_SUCC;
 }
 
-int hfsm_start(hfsm_handle hfsm) {
+int hfsm_send_event(hfsm_handle hfsm, event_t *e)
+{
+    int s;
+    struct hfsm_t *handle;;
+    RETURN_IF_NULL(e, HFSM_ERR_NULLPTR);
+    RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
 
-    message msginfo = {};
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
-
-    if (!phfsm)
-        return HFSM_ERR_NULLPTR;
-
-    msginfo.type = HFSM_SYS_START;
-    msginfo.size = sizeof(struct hfsm_sys_t);
-    msginfo.pri = PRIORITY_HIGH;
-    /*! TODO: msginfo.payload */
-
-    queue_push(phfsm->msg_handle, &msginfo);
-    return HFSM_OK;
-}
-
-int hfsm_stop(hfsm_handle hfsm) {
-
-    message msginfo = {};
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
-
-    if (!phfsm)
-        return HFSM_ERR_NULLPTR;
-
-    msginfo.type = HFSM_SYS_STOP;
-    msginfo.size = sizeof(struct hfsm_sys_t);
-    msginfo.pri = PRIORITY_HIGH;
-    /*! TODO: msginfo.payload */
-
-    queue_push(phfsm->msg_handle, &msginfo);
-    return HFSM_OK;
-}
-
-int hfsm_send_async_message(hfsm_handle hfsm, hfsm_message *msg) {
-
-    message msginfo = {};
-    struct hfsm_t* phfsm = (struct hfsm_t*)hfsm;
-
-    if (!phfsm)
-        return HFSM_ERR_NULLPTR;
-
-    if (sizeof(hfsm_message) > MESSAGE_MAX_SIZE)
-        return HFSM_ERR_MSG_OVERFLOW;
-
-    msginfo.type = HFSM_USER;
-    msginfo.size = sizeof(hfsm_message);
-    msginfo.pri = PRIORITY_MID;
-    memcpy(msginfo.payload, msg, msginfo.size);
-
-    queue_push(phfsm->msg_handle, &msginfo);
-    return HFSM_OK;
+    handle = (struct hfsm_t*)hfsm;
+    s = evthub_send(handle->evthub, e);
+    RETURN_IF_FAIL(s, HFSM_ERR_EVTHUB);
+    return HFSM_SUCC;
 }
 
 
