@@ -1,5 +1,5 @@
 /*
- * Hierarchical finite state machine
+ * State interface for C users
  *
  * Author wanch
  * Date 2021/12/23
@@ -27,18 +27,37 @@
 extern "C" {
 #endif
 
-#define HFSM_MAX_STATES     (64)
 typedef unsigned char state_id;
+
 typedef struct action_t {
+    /**
+     *    @brief entering state callback
+     *    @param[in]  userdata: user data
+     *    @return     none
+     */
     void (*entry)(void* /*!< userdata */);
+    /**
+     *    @brief exiting state callback
+     *    @param[in]  userdata: user data
+     *    @return     none
+     */
     void (*exit)(void* /*!< userdata */);
-    state_id (*process)(const event_t* /*!< event */, void* /*!< userdata */);
+    /**
+     *    @brief event processing callback in the state
+     *    @param[in]  event: point of FHSM handle
+     *    @param[in]  userdata: user data
+     *    @param[out] next_state: transiting target state id
+     *    @return     true if processing completed
+                      false if event need parent state processing yet.
+     */
+    bool (*process)(const event_t* /*!< event */,
+        void* /*!< userdata */, state_id* /*!< next state id */);
 } action_t;
 
 typedef struct state_t {
-    state_id id;
-    struct state_t *parent;
-    struct action_t action;
+    state_id id;                /*!< State identifier */
+    struct state_t *parent;     /*!< Parent state */
+    struct action_t action;     /*!< Parent action callback */
 } state_t;
 
 

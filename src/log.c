@@ -19,7 +19,7 @@ void hfsm_trace(const char *format, ...) {
     va_start(ap, format);
 
     n = vsnprintf(buf, sizeof(buf)-1, format, ap);
-    if (n > 0 && n < (sizeof(buf)-1)) {
+    if (n > 0 && n < (int)(sizeof(buf)-1)) {
         fprintf(stderr, "%s\n" RST, buf);
     }
     va_end (ap);

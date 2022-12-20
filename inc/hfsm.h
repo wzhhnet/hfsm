@@ -21,16 +21,11 @@
 #ifndef HIERARCHICAL_FINITE_STATE_MACHINE_H
 #define HIERARCHICAL_FINITE_STATE_MACHINE_H
 
+#include "state.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-#include "state.h"
-
-
-#define MODULE_NAME_HFSM        "HFSM"
-#define HFSM_STATE_NAME_LEN     (64)
-#define MESSAGE_PAYLOAD_LEN     (512)
 
 #define HFSM_EVENT_USR_BASE EVENT_ID_USER_BASE
 
@@ -54,20 +49,20 @@ typedef struct {
   *    @brief create HFSM
   *
   *    create HFSM
-  *    @param[in]  pstFsmAttr: attribute of HFSM
-  *    @param[out]  phfsm: point of FHSM handle
+  *    @param[in]  param: attribute of HFSM
+  *    @param[out] hfsm: point of FHSM handle
   *    @return     0 success, non-zero error code
   */
 int hfsm_create(hfsm_handle *hfsm, hfsm_param *param);
 
 /**
   *    @brief destroy HFSM
-  *
+  *           unprocessed events will be discarded.
   *    destroy HFSM
-  *    @param[in]  hfsm handle
+  *    @param[in]  hfsm: point of FHSM handle
   *    @return     0 success, non-zero error code
   */
-int hfsm_destroy(hfsm_handle hfsm);
+int hfsm_destroy(hfsm_handle *hfsm);
 
 /**
   *    @brief start HFSM

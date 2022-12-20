@@ -129,17 +129,24 @@ static void hfsm_event_invoke(const event_t *evt, void *userdata)
     RETURN_IF_NULL(userdata,);
 
     if (evt->id == HFSM_SYS_START) {
-        handle->cur_state = (state_t*)userdata;
+        handle->cur_state = (state_t*)evt->param;
         if (handle->cur_state->action.entry) {
             handle->cur_state->action.entry(handle->user_data);
         }
     } else if (handle->cur_state) {
         state_t *s = handle->cur_state;
-        if (s->action.process) {
-            state_id id = s->action.process(evt, handle->user_data);
-            if (id != handle->cur_state->id) {
-                hfsm_state_transit(handle, id);
+        while (s) {
+            if (s->action.process) {
+                state_id id = handle->cur_state->id;
+                bool done = s->action.process(evt, handle->user_data, &id);
+                if (done) {
+                    if (id != handle->cur_state->id) {
+                        hfsm_state_transit(handle, id);
+                    }
+                    break;
+                }
             }
+            s = s->parent;
         }
     }
 }
@@ -154,7 +161,6 @@ state_t* hfsm_new_state(hfsm_handle hfsm)
 
     info = ALLOCATOR_ALLOC(state, &handle->pool);
     RETURN_IF_NULL(info, NULL);
-
     return &info->state;
 }
 
@@ -177,20 +183,32 @@ int hfsm_create(hfsm_handle *hfsm, hfsm_param *param)
     return HFSM_SUCC;
 }
 
-int hfsm_destroy(hfsm_handle hfsm)
+int hfsm_destroy(hfsm_handle *hfsm)
 {
     struct hfsm_t *handle;
     struct listnode *c, *n;
     struct state_info_t *info;
     RETURN_IF_NULL(hfsm, HFSM_ERR_NULLPTR);
-    handle = (struct hfsm_t*)hfsm;
+    handle = (struct hfsm_t*)(*hfsm);
+    RETURN_IF_NULL(handle, HFSM_ERR_NULLPTR);
 
+    /*! Recycled all state into pool (not necessary) */
     list_for_each_safe(c, n, &handle->state_list) {
         info = list_entry(c, struct state_info_t, node);
         list_remove(c);
         ALLOCATOR_FREE(state, &handle->pool, info);
     }
+
+    /*! Destory allocator of state */
     ALLOCATOR_DESTORY(state, &handle->pool);
+    /*! Destory evthub */
+    if (handle->evthub) {
+        evthub_destory(&handle->evthub);
+    }
+    /*! Destory hfsm */
+    free(*hfsm);
+    *hfsm = NULL;
+
     return HFSM_SUCC;
 }
 
