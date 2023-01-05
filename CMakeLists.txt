@@ -5,7 +5,8 @@ project(hfsm
   VERSION "1.0.0"
 )
 
-option(TEST "building example code" OFF)
+option(TEST "building test code" OFF)
+option(SAMPLE "building sample code" OFF)
 
 set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
@@ -41,6 +42,7 @@ set_target_properties(${STATIC_LIB_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 set_target_properties(${SHARED_LIB_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
 add_subdirectory(evthub)
+add_subdirectory(c++)
 if (TEST)
 add_executable(${TEST_EXEC_NAME} ${TEST_SRCS} ${GTEST_SRCS})
 target_link_libraries(${TEST_EXEC_NAME} LINK_PUBLIC ${STATIC_LIB_NAME} gtest evthub)

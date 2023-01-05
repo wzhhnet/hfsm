@@ -133,7 +133,7 @@ static void hfsm_event_invoke(const event_t *evt, void *userdata)
         if (handle->cur_state->action.entry) {
             handle->cur_state->action.entry(handle->user_data);
         }
-    } else if (handle->cur_state) {
+    } else {
         state_t *s = handle->cur_state;
         while (s) {
             if (s->action.process) {
