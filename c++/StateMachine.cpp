@@ -46,10 +46,8 @@ void StateMachine::Start(State *init_state)
 
 void StateMachine::OnEvent(const SpEvent evt)
 {
-    LOGD("%s() evt = %d", __FUNCTION__, evt->ID());
     if (evt == nullptr) return;
     if (evt->ID() == StartEvent::EVENT_ID) {
-        LOGD("%s()", "OnEvent state start");
         const StartEvent *e =
             dynamic_cast<const StartEvent*>(evt.get());
         cur_state_ = e->StartState();
@@ -58,19 +56,14 @@ void StateMachine::OnEvent(const SpEvent evt)
         }
     } else {
         State *cur = cur_state_;
-        if (!cur) {
-            LOGE("%s() not start", __FUNCTION__);
-        }
         while (cur) {
             State *tar = cur; // transition target
-            LOGD("%s()", "OnEvent state invoke");
             bool done = cur->Invoke(evt, this, &tar);
             if (done) {
                 if (tar && tar != cur) {
                     /// transite to target state
                     if (tar->Guard(this) && Transit(tar)) {
                         cur_state_ = tar;
-                        LOGD("%s()", "OnEvent state transition");
                     }
                 }
                 break;
@@ -83,7 +76,6 @@ void StateMachine::OnEvent(const SpEvent evt)
 bool StateMachine::SendEvent(const SpEvent &evt)
 {
     if (evt_hub_ == nullptr) {
-        LOGD("%s()", __FUNCTION__);
         return false;
     }
 
