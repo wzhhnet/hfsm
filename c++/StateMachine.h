@@ -55,7 +55,7 @@ class State
 };
 
 template <typename SM>
-class StateImpl : public State
+class StateImpl final : public State
 {
   public:
     using FnGuard = bool(SM::*)();
@@ -79,10 +79,10 @@ class StateImpl : public State
     void SetAction(const StateAction *action);
 
   protected:
-    virtual bool Guard(StateMachine *sm);
-    virtual void Enter(StateMachine *sm);
-    virtual void Exit(StateMachine *sm);
-    virtual bool Invoke(const SpEvent &evt, StateMachine *sm, State **to);
+    virtual bool Guard(StateMachine *sm) override;
+    virtual void Enter(StateMachine *sm) override;
+    virtual void Exit(StateMachine *sm) override;
+    virtual bool Invoke(const SpEvent &evt, StateMachine *sm, State **to) override;
 
   private:
     StateAction action_ = {};
@@ -164,7 +164,7 @@ class StateMachine : public EventHandler
     virtual const StateSet& GetStateSet() const = 0;
 
   protected:
-    virtual void OnEvent(const SpEvent evt) final;
+    virtual void OnEvent(const SpEvent evt) override final;
 
   private:
     class StartEvent : public Event
