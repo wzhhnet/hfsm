@@ -26,130 +26,34 @@
 #include <functional>
 #include <EventHub.h>
 
+
+#include "State.h"
+#include "Transition.h"
+
 namespace utils {
 namespace hfsm {
 
-class StateMachine;
-class State
-{
-  public:
-    State() {}
-    State(State *parent) : parent_(parent) {}
-    virtual ~State() {}
-    void SetParent(State* parent) { parent_ = parent; }
-    State* Parent() { return parent_; }
-
-  protected:
-    /// Transition is allowed if guard is true
-    virtual bool Guard(StateMachine *sm) = 0;
-    /// Entry action on current state
-    virtual void Enter(StateMachine *sm) = 0;
-    /// Exit action on current state
-    virtual void Exit(StateMachine *sm) = 0;
-    /// Event processing action on current state
-    virtual bool Invoke(const SpEvent &evt, StateMachine *sm, State **to) = 0;
-
-  private:
-    State *parent_ = nullptr;
-    friend StateMachine;
-};
-
-template <typename SM>
-class StateImpl final : public State
-{
-  public:
-    using FnGuard = bool(SM::*)();
-    using FnCommon = void(SM::*)();
-    using FnInvoke = bool(SM::*)(const SpEvent&, State**);
-    struct StateAction {
-        FnGuard   guard;
-        FnCommon  enter;
-        FnCommon  exit;
-        FnInvoke  invoke;
-    };
-
-  public:
-    /// Constructor
-    StateImpl();
-    StateImpl(State *parent);
-    StateImpl(StateAction &action);
-    StateImpl(State *parent, StateAction &action);
-    /// Deconstructor
-    virtual ~StateImpl();
-    void SetAction(const StateAction *action);
-
-  protected:
-    virtual bool Guard(StateMachine *sm) override;
-    virtual void Enter(StateMachine *sm) override;
-    virtual void Exit(StateMachine *sm) override;
-    virtual bool Invoke(const SpEvent &evt, StateMachine *sm, State **to) override;
-
-  private:
-    StateAction action_ = {};
-};
-
-template <typename SM>
-StateImpl<SM>::StateImpl() {}
-
-template <typename SM>
-StateImpl<SM>::StateImpl(State *parent) : State(parent) {}
-
-template <typename SM>
-StateImpl<SM>::StateImpl(StateAction &action) : action_(action) {}
-
-template <typename SM>
-StateImpl<SM>::StateImpl(State *parent, StateAction &action)
-  : State(parent), action_(action) {}
-
-template <typename SM>
-StateImpl<SM>::~StateImpl() {}
-
-template <typename SM>
-void StateImpl<SM>::SetAction(const StateAction *action)
-{
-    if (action)
-        action_ = *action;
-}
-
-template <typename SM>
-bool StateImpl<SM>::Guard(StateMachine *sm)
-{
-    if (action_.guard) {
-        SM *obj = dynamic_cast<SM*>(sm);
-        return (obj->*action_.guard)();
-    }
-    return true;
-}
-
-template <typename SM>
-void StateImpl<SM>::Enter(StateMachine *sm)
-{
-    if (action_.enter) {
-        SM *obj = dynamic_cast<SM*>(sm);
-        (obj->*action_.enter)();
-    }
-}
-
-template <typename SM>
-void StateImpl<SM>::Exit(StateMachine *sm)
-{
-    if (action_.exit) {
-        SM *obj = dynamic_cast<SM*>(sm);
-        (obj->*action_.exit)();
-    }
-}
-
-template <typename SM>
-bool StateImpl<SM>::Invoke(const SpEvent &evt, StateMachine *sm, State **to)
-{
-    if (action_.invoke) {
-        SM *obj = dynamic_cast<SM*>(sm);
-        return (obj->*action_.invoke)(evt, to);
-    }
-    return false;
-}
-
-using SpState = std::shared_ptr<State>;
+/// The sequence of State machine run-time:
+///
+/// State: S0, S1, S2 (S1 and S2 are both sub-states of S0)
+/// Event: E1
+/// Transition: T1
+///
+/// Scenario 1: current state transit from S1 to S2 via T1 triggered by E1.
+/// 1, S1->Invoke
+/// 3, T1->EventTriggered
+/// 4, T1->Guard
+/// Below is continue if T1->Guard return true or no guard.
+/// 5, S1->Exit
+/// 6, T1->Effect
+/// 7, S2->Entry
+///
+/// Scenario 2: current state transit from S1 to S1 (self-transition)
+/// 1, S1->Invoke
+/// 2, T1->EventTriggered
+/// 3, T1->Guard
+/// Below is continue if T1->Guard return true or no guard.
+/// 4, T1->Effect
 
 class StateMachine : public EventHandler
 {
@@ -167,36 +71,17 @@ class StateMachine : public EventHandler
     virtual void OnEvent(const SpEvent evt) override final;
 
   private:
-    class StartEvent : public Event
-    {
-      public:
-        StartEvent(State *state);
-        virtual ~StartEvent();
-        virtual uint32_t ID() const;
-        virtual const char* Name() const;
-        virtual EvtPriority Priority() const;
-        State* StartState() const;
-      public:
-        static const uint32_t EVENT_ID = 0xF0F0F0F0;
-
-      private:
-        const char *NAME = "Start";
-        State *state_ = nullptr;
-    };
-
-  private:
-    bool Transit(const State *to);
-    /// Disallow the copy constructor
-    StateMachine(const StateMachine &) = delete;
-    /// Disallow the assign constructor
-    void operator=(const StateMachine &) = delete;
-
-  private:
     const size_t  MAX_EVENT_NUM = 64;
     State *cur_state_ = nullptr;
     std::unique_ptr<EventHub> evt_hub_;
     StateSet state_set_;
     SpEvent start_evt_;
+
+  private:
+    /// Disallow the copy constructor
+    StateMachine(const StateMachine &) = delete;
+    /// Disallow the assign constructor
+    void operator=(const StateMachine &) = delete;
 };
 
 };

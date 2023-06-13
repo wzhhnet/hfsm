@@ -20,17 +20,55 @@
  */
 
 #include <list>
+
 #include "StateMachine.h"
 #include "log.h"
 
 namespace utils {
 namespace hfsm {
 
+/// System event used to start HFSM.
+class StartEvent : public Event
+{
+  public:
+    StartEvent(State *state) : state_(state) {}
+    virtual ~StartEvent() {}
+    virtual uint32_t ID() const { return EVENT_ID; }
+    virtual const char* Name() const { return NAME; }
+    virtual EvtPriority Priority() const { return EvtPriority::kEvtPriHigh; }
+    State* StartState() const { return state_; }
+
+  public:
+    static const uint32_t EVENT_ID = 0xF0F0F0F0;
+
+  private:
+    const char *NAME = "Start";
+    State *state_ = nullptr;
+};
+
+/// System transition used to transit to initial state.
+class InitTransition : public Transition
+{
+  public:
+    InitTransition(State *source, State *target)
+        : Transition(source, target) {}
+    virtual ~InitTransition() {}
+
+  private:
+    virtual bool Guard(StateMachine *sm) override { return true; }
+    virtual void Effect(StateMachine *sm) override {}
+    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) override {
+        return true;
+    }
+};
+
+/// Constructor
 StateMachine::StateMachine()
   : cur_state_(nullptr), evt_hub_(), state_set_(), start_evt_()
 {
 }
 
+/// Deconstructor
 StateMachine::~StateMachine()
 {
 }
@@ -48,117 +86,46 @@ void StateMachine::OnEvent(const SpEvent evt)
 {
     if (evt == nullptr) return;
     if (evt->ID() == StartEvent::EVENT_ID) {
+        /// Transit to initial state
         const StartEvent *e =
             dynamic_cast<const StartEvent*>(evt.get());
-        cur_state_ = e->StartState();
-        if (cur_state_) {
-            cur_state_->Enter(this);
-        }
+        InitTransition t(nullptr, e->StartState());
+        cur_state_ = t.Transit(this);
     } else {
         State *cur = cur_state_;
+        /// Invoke event on current state and parents.
         while (cur) {
-            State *tar = cur; // transition target
-            bool done = cur->Invoke(evt, this, &tar);
-            if (done) {
-                if (tar && tar != cur) {
-                    /// transite to target state
-                    if (tar->Guard(this) && Transit(tar)) {
+            bool done = cur->Invoke(evt, this);
+            /// Check if transition is happened on currrent state.
+            /// An event can trigger only one transition.
+            const TransSet transet = cur->GetTransitions();
+            for (const auto &trans : transet) {
+                /// Check trigger and guard
+                if (trans->EventTriggered(evt, this)
+                    && trans->Guard(this)) {
+                    State *tar = trans->Transit(this);
+                    /// Transition happened
+                    if (tar != nullptr) {
+                        done = true;
                         cur_state_ = tar;
                     }
+                    break;
                 }
-                break;
             }
-            cur = cur->Parent();
+            /// break if event is done or transition happened.
+            if (done)
+                break;
+            cur = cur->Parent(); // continue if event is not done.
         }
     }
 }
 
 bool StateMachine::SendEvent(const SpEvent &evt)
 {
-    if (evt_hub_ == nullptr) {
+    if (evt_hub_ == nullptr)
         return false;
-    }
 
     return evt_hub_->Send(evt);
-}
-
-bool StateMachine::Transit(const State *to)
-{
-    if (!cur_state_ || !to) {
-        return false;
-    }
-
-    const StateSet &states = GetStateSet();
-    const auto it = states.find(const_cast<State*>(to));
-    if (it == states.end()) {
-        return false;
-    }
-
-    /*! fetch all parents of current state */
-    std::list<State*> from_list;
-    State *cur = cur_state_;
-    while (cur) {
-        from_list.push_back(cur);
-        cur = cur->Parent();
-    }
-
-    /*! fetch all parents of target state */
-    std::list<State*> to_list;
-    cur = const_cast<State*>(to);
-    while (cur) {
-        to_list.push_back(cur);
-        cur = cur->Parent();
-    }
-
-    /*! remove the common tail */
-    while (from_list.size() && to_list.size()
-        && from_list.back() == to_list.back()) {
-        from_list.pop_back();
-        to_list.pop_back();
-    }
-
-    /*! invoke exit action */
-    for (auto it = from_list.begin();
-            it != from_list.end(); ++it) {
-        (*it)->Exit(this);
-    }
-
-    /*! invoke entry action */
-    for (auto it = to_list.rbegin();
-            it != to_list.rend(); ++it) {
-        (*it)->Enter(this);
-    }
-
-    return true;
-}
-
-StateMachine::StartEvent::StartEvent(State *state)
-  : state_(state)
-{
-}
-
-StateMachine::StartEvent::~StartEvent()
-{
-}
-
-uint32_t StateMachine::StartEvent::ID() const
-{
-    return EVENT_ID;
-}
-
-const char* StateMachine::StartEvent::Name() const
-{
-    return NAME;
-}
-
-EvtPriority StateMachine::StartEvent::Priority() const
-{
-    return EvtPriority::kEvtPriHigh;
-}
-
-State* StateMachine::StartEvent::StartState() const
-{
-    return state_;
 }
 
 };

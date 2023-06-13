@@ -11,8 +11,8 @@ project(cpphfsm
   VERSION "1.0.0"
 )
 
-add_library(${PROJECT_NAME} StateMachine.cpp)
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC eventhub)
+add_library(${PROJECT_NAME} StateMachine.cpp Transition.cpp)
+target_link_libraries(${PROJECT_NAME} LINK_PUBLIC evthub)
 
 if (SAMPLE)
 set(SAMPLE_NAME hfsm_sample)

@@ -28,91 +28,169 @@
 using namespace utils;
 using namespace hfsm;
 
+///   ------
+///  |  S0  |------|-------------|--------------|
+///   ------       |             |              |
+///                |             |              |
+///             ------         ------         ------
+///            |  S1  |--E1-->|  S2  |--E2-->|  S3  |
+///             ------         ------         ------
+
 class SampleSM : public StateMachine
 {
   public:
-    SampleSM() : state_0_(), state_1_(), state_2_()
+    SampleSM() : s0_(), s1_(), s2_(), s3_()
     {
     }
     virtual ~SampleSM() {}
-    void state_0_enter()
+    void s0_enter()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    void state_0_exit()
+    void s0_exit()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    bool state_0_invoke(const SpEvent &evt, State **ppnext)
+    bool s0_invoke(const SpEvent &evt)
     {
         LOGD("%s() evt = %s", __FUNCTION__, evt->Name());
         return true;
     }
-    void state_1_enter()
+
+    void s1_enter()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    void state_1_exit()
+    void s1_exit()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    bool state_1_invoke(const SpEvent &evt, State **ppnext)
+    bool s1_invoke(const SpEvent &evt)
     {
         LOGD("%s() evt = %s", __FUNCTION__, evt->Name());
         if (evt->ID() == 1) {
             return true;
-        } else if (evt->ID() == 3) {
-            *ppnext = &state_2_;    // transit to state 2
+        }
+        return false;
+    }
+    bool s1_trans_to_s2_triggered(const SpEvent &evt) {
+        if (evt->ID() == 1) {
+            LOGD("%s() trigger evt = %s", __FUNCTION__, evt->Name());
             return true;
         }
         return false;
     }
-    void state_2_enter()
+    bool s1_trans_to_s2_guard() {
+        LOGD("%s() guard = %d", __FUNCTION__, s1_to_s2_guard_);
+        bool ret = s1_to_s2_guard_;
+        s1_to_s2_guard_ = !s1_to_s2_guard_;
+        return ret;
+    }
+    void s1_trans_to_s2_effect()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    void state_2_exit()
+    void s2_enter()
     {
         LOGD("%s()", __FUNCTION__);
     }
-    bool state_2_invoke(const SpEvent &evt, State **ppnext)
+    void s2_exit()
+    {
+        LOGD("%s()", __FUNCTION__);
+    }
+    bool s2_invoke(const SpEvent &evt)
     {
         LOGD("%s() evt = %s", __FUNCTION__, evt->Name());
-        if (evt->ID() == 3) {
+        return false;
+    }
+    bool s2_trans_to_s3_triggered(const SpEvent &evt) {
+        if (evt->ID() == 2) {
+            LOGD("%s() trigger evt = %s", __FUNCTION__, evt->Name());
             return true;
         }
         return false;
     }
+    void s2_trans_to_s3_effect()
+    {
+        LOGD("%s()", __FUNCTION__);
+    }
 
+    void s3_enter()
+    {
+        LOGD("%s()", __FUNCTION__);
+    }
+    void s3_exit()
+    {
+        LOGD("%s()", __FUNCTION__);
+    }
+    bool s3_invoke(const SpEvent &evt)
+    {
+        LOGD("%s() evt = %s", __FUNCTION__, evt->Name());
+        return false;
+    }
     void Setup()
     {
+        /// configure state0 as root state.
         StateImpl<SampleSM>::StateAction action_0 = {
-            nullptr,
-            &SampleSM::state_0_enter,
-            &SampleSM::state_0_exit,
-            &SampleSM::state_0_invoke
+            &SampleSM::s0_enter,
+            &SampleSM::s0_exit,
+            &SampleSM::s0_invoke
         };
-        state_0_.SetAction(&action_0);
+        s0_.SetAction(&action_0);
 
+        /// configure state1 as sub-state of state0.
         StateImpl<SampleSM>::StateAction action_1 = {
-            nullptr,
-            &SampleSM::state_1_enter,
-            &SampleSM::state_1_exit,
-            &SampleSM::state_1_invoke
+            &SampleSM::s1_enter,
+            &SampleSM::s1_exit,
+            &SampleSM::s1_invoke
         };
-        state_1_.SetParent(&state_0_);
-        state_1_.SetAction(&action_1);
+        s1_.SetParent(&s0_);
+        s1_.SetAction(&action_1);
 
+        /// configure state2 as sub-state of state0.
         StateImpl<SampleSM>::StateAction action_2 = {
-            nullptr,
-            &SampleSM::state_2_enter,
-            &SampleSM::state_2_exit,
-            &SampleSM::state_2_invoke
+            &SampleSM::s2_enter,
+            &SampleSM::s2_exit,
+            &SampleSM::s2_invoke
         };
-        state_2_.SetParent(&state_0_);
-        state_2_.SetAction(&action_2);
+        s2_.SetParent(&s0_);
+        s2_.SetAction(&action_2);
 
-        Start(&state_1_);
+        /// configure state3 as sub-state of state0.
+        StateImpl<SampleSM>::StateAction action_3 = {
+            &SampleSM::s3_enter,
+            &SampleSM::s3_exit,
+            &SampleSM::s3_invoke
+        };
+        s3_.SetParent(&s0_);
+        s3_.SetAction(&action_3);
+
+        /// configure transition form state1 to state2.
+        /// trigger: event1
+        /// guard: s1_to_s2_guard_
+        TransitionImpl<SampleSM>::TransAction trans_1_to_2_act = {
+            .guard = &SampleSM::s1_trans_to_s2_guard,
+            .effect = &SampleSM::s1_trans_to_s2_effect,
+            .triggered = &SampleSM::s1_trans_to_s2_triggered
+        };
+        std::shared_ptr<TransitionImpl<SampleSM>> trans_1_2(
+            new TransitionImpl<SampleSM>(&s1_, &s2_, trans_1_to_2_act));
+        s1_.AddTransition(trans_1_2);
+
+        /// configure transition form state2 to state3.
+        /// trigger: event2
+        /// guard: no guard
+        TransitionImpl<SampleSM>::TransAction trans_2_to_3_act = {
+            .guard = nullptr,
+            .effect = &SampleSM::s2_trans_to_s3_effect,
+            .triggered = &SampleSM::s2_trans_to_s3_triggered
+        };
+        std::shared_ptr<TransitionImpl<SampleSM>> trans_2_3(
+            new TransitionImpl<SampleSM>(&s2_, &s3_, trans_2_to_3_act));
+        s2_.AddTransition(trans_2_3);
+
+        /// set state1 as initial state
+        Start(&s1_);
     }
 
     virtual const StateSet& GetStateSet() const
@@ -121,10 +199,12 @@ class SampleSM : public StateMachine
     }
 
   private:
-    const StateSet STATES = {&state_0_, &state_1_, &state_2_};
-    StateImpl<SampleSM> state_0_;
-    StateImpl<SampleSM> state_1_;
-    StateImpl<SampleSM> state_2_;
+    const StateSet STATES = {&s0_, &s1_, &s2_, &s3_};
+    StateImpl<SampleSM> s0_;
+    StateImpl<SampleSM> s1_;
+    StateImpl<SampleSM> s2_;
+    StateImpl<SampleSM> s3_;
+    bool s1_to_s2_guard_ = false;
 };
 
 
@@ -149,17 +229,26 @@ int main(int argc, char **argv)
 {
     SampleSM sm;
 
-    SpEvent evt1(new SampleEvent(1, "event1", EvtPriority::kEvtPriHigh));
+    SpEvent evt1(new SampleEvent(1, "event1", EvtPriority::kEvtPriMid));
     SpEvent evt2(new SampleEvent(2, "event2", EvtPriority::kEvtPriMid));
     SpEvent evt3(new SampleEvent(3, "event3", EvtPriority::kEvtPriMid));
-    SpEvent evt4(new SampleEvent(4, "event4", EvtPriority::kEvtPriLow));
 
+    /// enter initial state(1)
     sm.Setup();
 
+    /// triggered transiton from state(1) to state(2)
+    /// but failed due to guard is false
     sm.SendEvent(evt1);
+
+    /// set guard to true and retrigger to transit to state(2)
+    evt1.reset(new SampleEvent(1, "event1", EvtPriority::kEvtPriMid));
+    sm.SendEvent(evt1);
+
+    /// triggered transiton from state(2) to state(3)
     sm.SendEvent(evt2);
+
+    /// invoke event(3) on state(3)
     sm.SendEvent(evt3);
-    sm.SendEvent(evt4);
 
     while(1)
     usleep(1000);
