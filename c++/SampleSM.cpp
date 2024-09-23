@@ -193,13 +193,7 @@ class SampleSM : public StateMachine
         Start(&s1_);
     }
 
-    virtual const StateSet& GetStateSet() const
-    {
-        return STATES;
-    }
-
   private:
-    const StateSet STATES = {&s0_, &s1_, &s2_, &s3_};
     StateImpl<SampleSM> s0_;
     StateImpl<SampleSM> s1_;
     StateImpl<SampleSM> s2_;

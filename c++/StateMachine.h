@@ -65,7 +65,6 @@ class StateMachine : public EventHandler
     virtual ~StateMachine();
     void Start(State *init_state);
     bool SendEvent(const SpEvent &evt);
-    virtual const StateSet& GetStateSet() const = 0;
 
   protected:
     virtual void OnEvent(const SpEvent evt) override final;
