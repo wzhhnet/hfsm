@@ -22,13 +22,14 @@
 #include <list>
 #include <EventHub.h>
 
+#include "log.h"
 #include "State.h"
 #include "Transition.h"
 
 namespace utils {
 namespace hfsm {
 
-Transition::Transition(State *source, State *target)
+Transition::Transition(const SpState &source, const SpState &target)
   : src_(source), tar_(target)
 {
 }
@@ -37,27 +38,41 @@ Transition::~Transition()
 {
 }
 
-State* Transition::Transit(StateMachine *sm)
+bool Transition::operator==(const Transition& other) const
 {
-    if (!tar_)
-        return nullptr;
+    return (src_ == other.src_)
+        && (tar_ == other.tar_);
+}
 
+SpState Transition::Source() const
+{
+    return src_;
+}
+
+SpState Transition::Target() const
+{
+    return tar_;
+}
+
+SpState Transition::Transit(StateMachine *sm)
+{
+    /*! State self-transition */
     if (src_ == tar_) {
         Effect(sm);
         return tar_;
     }
 
     /*! fetch all parents of current state */
-    std::list<State*> from_list;
-    State *cur = src_;
+    std::list<SpState> from_list;
+    auto cur = src_;
     while (cur) {
         from_list.push_back(cur);
         cur = cur->Parent();
     }
 
     /*! fetch all parents of target state */
-    std::list<State*> to_list;
-    cur = const_cast<State*>(tar_);
+    std::list<SpState> to_list;
+    cur = tar_;
     while (cur) {
         to_list.push_back(cur);
         cur = cur->Parent();
@@ -88,6 +103,6 @@ State* Transition::Transit(StateMachine *sm)
     return tar_;
 }
 
-};
-};
+}
+}
 

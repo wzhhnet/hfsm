@@ -19,7 +19,7 @@
  * limitations under the License.
  */
 
-#include <list>
+#include <algorithm> // for find_if
 
 #include "StateMachine.h"
 #include "log.h"
@@ -31,40 +31,24 @@ namespace hfsm {
 class StartEvent : public Event
 {
   public:
-    StartEvent(State *state) : state_(state) {}
+    StartEvent() {}
     virtual ~StartEvent() {}
-    virtual uint32_t ID() const { return EVENT_ID; }
-    virtual const char* Name() const { return NAME; }
-    virtual EvtPriority Priority() const { return EvtPriority::kEvtPriHigh; }
-    State* StartState() const { return state_; }
-
-  public:
-    static const uint32_t EVENT_ID = 0xF0F0F0F0;
-
-  private:
-    const char *NAME = "Start";
-    State *state_ = nullptr;
-};
-
-/// System transition used to transit to initial state.
-class InitTransition : public Transition
-{
-  public:
-    InitTransition(State *source, State *target)
-        : Transition(source, target) {}
-    virtual ~InitTransition() {}
-
-  private:
-    virtual bool Guard(StateMachine *sm) override { return true; }
-    virtual void Effect(StateMachine *sm) override {}
-    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) override {
-        return true;
+    virtual uint32_t ID() const {
+        return InitTransition::INIT_EVT_ID;
     }
+    virtual const char* Name() const {
+        return NAME;
+    }
+    virtual EvtPriority Priority() const {
+        return EvtPriority::kEvtPriHigh;
+    }
+
+  private:
+    const char *NAME = "StartEvent";
 };
 
 /// Constructor
 StateMachine::StateMachine()
-  : cur_state_(nullptr), evt_hub_(), state_set_(), start_evt_()
 {
 }
 
@@ -73,51 +57,70 @@ StateMachine::~StateMachine()
 {
 }
 
-void StateMachine::Start(State *init_state)
+void StateMachine::Start()
 {
-    evt_hub_.reset(new EventHub(this, MAX_EVENT_NUM));
-    if (evt_hub_ != nullptr) {
-        start_evt_.reset(new StartEvent(init_state));
-        evt_hub_->Send(start_evt_);
+    if (running_) {
+        LOGE("%s SM is running", __func__);
+        return;
     }
+    evt_hub_.reset(new EventHub(this, MAX_EVENT_NUM));
+    evt_hub_->Send(SpEvent(new StartEvent()));
+}
+
+bool StateMachine::AddTransition(const SpTrans &trans)
+{
+    if (running_) {
+        LOGE("%s SM is running", __func__);
+        return false;
+    }
+    auto it = std::find_if(trans_list_.begin(), trans_list_.end(),
+        [trans](const SpTrans &sp) -> bool {
+            return (*sp == *trans);
+        });
+    if (it == trans_list_.end()) {
+        trans_list_.emplace_back(trans);
+        return true;
+    }
+    LOGE("%s duplicated transition", __func__);
+    return false;
 }
 
 void StateMachine::OnEvent(const SpEvent evt)
 {
     if (evt == nullptr) return;
-    if (evt->ID() == StartEvent::EVENT_ID) {
-        /// Transit to initial state
-        const StartEvent *e =
-            dynamic_cast<const StartEvent*>(evt.get());
-        InitTransition t(nullptr, e->StartState());
-        cur_state_ = t.Transit(this);
+    if (TransTriggered(evt)) {
+        /// Transition occerred
+        if (!cur_state_) {
+            trans_list_.clear();
+            running_ = false;
+        } else {
+            running_ = true;
+        }
     } else {
-        State *cur = cur_state_;
         /// Invoke event on current state and parents.
-        while (cur) {
-            bool done = cur->Invoke(evt, this);
-            /// Check if transition is happened on currrent state.
-            /// An event can trigger only one transition.
-            const TransSet transet = cur->GetTransitions();
-            for (const auto &trans : transet) {
-                /// Check trigger and guard
-                if (trans->EventTriggered(evt, this)
-                    && trans->Guard(this)) {
-                    State *tar = trans->Transit(this);
-                    /// Transition happened
-                    if (tar != nullptr) {
-                        done = true;
-                        cur_state_ = tar;
-                    }
-                    break;
-                }
-            }
-            /// break if event is done or transition happened.
-            if (done)
-                break;
-            cur = cur->Parent(); // continue if event is not done.
+        auto cur = cur_state_;
+        /// continue if event invoked not done.
+        while (cur && !cur->Invoke(evt, this)) {
+            cur = cur->Parent();
         }
     }
+}
+
+bool StateMachine::TransTriggered(const SpEvent &evt)
+{
+    /// Check if transition is happened on currrent state.
+    /// An event can trigger only one transition.
+    for (const auto &trans : trans_list_) {
+        /// Check transition(source, trigger and guard)
+        if (cur_state_ == trans->Source()
+            && trans->EventTriggered(evt, this)
+            && trans->Guard(this)) {
+            /// Transition happened
+            cur_state_ = trans->Transit(this);
+            return true;
+        }
+    }
+    return false;
 }
 
 bool StateMachine::SendEvent(const SpEvent &evt)
@@ -128,6 +131,6 @@ bool StateMachine::SendEvent(const SpEvent &evt)
     return evt_hub_->Send(evt);
 }
 
-};
-};
+}
+}
 

@@ -23,9 +23,9 @@
 #define _CPP_HIERARCHICAL_FINITE_STATE_MACHINE_H
 
 #include <set>
+#include <list>
 #include <functional>
 #include <EventHub.h>
-
 
 #include "State.h"
 #include "Transition.h"
@@ -40,41 +40,65 @@ namespace hfsm {
 /// Transition: T1
 ///
 /// Scenario 1: current state transit from S1 to S2 via T1 triggered by E1.
-/// 1, S1->Invoke
-/// 3, T1->EventTriggered
-/// 4, T1->Guard
-/// Below is continue if T1->Guard return true or no guard.
-/// 5, S1->Exit
-/// 6, T1->Effect
-/// 7, S2->Entry
+/// 1, T1->EventTriggered
+/// 2, T1->Guard
+/// Below is continue if transition is occerred.
+/// 3, S1->Exit
+/// 4, T1->Effect
+/// 5, S2->Entry
+/// Below is continue if transition is NOT occerred.
+/// 3, S1->Invoke
 ///
 /// Scenario 2: current state transit from S1 to S1 (self-transition)
 /// 1, S1->Invoke
 /// 2, T1->EventTriggered
 /// 3, T1->Guard
-/// Below is continue if T1->Guard return true or no guard.
+/// Below is continue if transition is occerred.
 /// 4, T1->Effect
+/// Below is continue if transition is NOT occerred.
+/// 4, S1->Invoke
 
 class StateMachine : public EventHandler
 {
   public:
-    using StateSet = std::set<State*>;
-
-  public:
     StateMachine();
     virtual ~StateMachine();
-    void Start(State *init_state);
+    /**
+     * @brief Start SM with initial state
+     *        "INIT_EVT_ID" will be activited internally
+     *
+     * @param None.
+     * @return None.
+     */
+    void Start();
+    /**
+     * @brief  Add transition to SM
+     *         Do not call this on SM running
+     *
+     * @param[in] trans: transition object
+     * @return true if success.
+     */
+    bool AddTransition(const SpTrans &trans);
+    /**
+     * @brief Send event to SM
+     *
+     * @param[in] evt: event object
+     * @return true if success.
+     */
     bool SendEvent(const SpEvent &evt);
 
   protected:
     virtual void OnEvent(const SpEvent evt) override final;
 
   private:
+    bool TransTriggered(const SpEvent &evt);
+
+  private:
     const size_t  MAX_EVENT_NUM = 64;
-    State *cur_state_ = nullptr;
     std::unique_ptr<EventHub> evt_hub_;
-    StateSet state_set_;
-    SpEvent start_evt_;
+    SpState cur_state_ = nullptr;
+    bool running_ = false;
+    TransList trans_list_;
 
   private:
     /// Disallow the copy constructor
@@ -83,8 +107,8 @@ class StateMachine : public EventHandler
     void operator=(const StateMachine &) = delete;
 };
 
-};
-};
+}
+}
 
 #endif //_CPP_HIERARCHICAL_FINITE_STATE_MACHINE_H
 

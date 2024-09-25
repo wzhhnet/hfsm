@@ -39,7 +39,7 @@ using namespace hfsm;
 class SampleSM : public StateMachine
 {
   public:
-    SampleSM() : s0_(), s1_(), s2_(), s3_()
+    SampleSM()
     {
     }
     virtual ~SampleSM() {}
@@ -128,6 +128,13 @@ class SampleSM : public StateMachine
         LOGD("%s() evt = %s", __FUNCTION__, evt->Name());
         return false;
     }
+    bool s3_trans_to_null_triggered(const SpEvent &evt) {
+        if (evt->ID() == 3) {
+            LOGD("%s() trigger evt = %s", __FUNCTION__, evt->Name());
+            return true;
+        }
+        return false;
+    }
     void Setup()
     {
         /// configure state0 as root state.
@@ -136,7 +143,7 @@ class SampleSM : public StateMachine
             &SampleSM::s0_exit,
             &SampleSM::s0_invoke
         };
-        s0_.SetAction(&action_0);
+        auto s0 = std::make_shared<StateImpl<SampleSM>>(action_0);
 
         /// configure state1 as sub-state of state0.
         StateImpl<SampleSM>::StateAction action_1 = {
@@ -144,8 +151,7 @@ class SampleSM : public StateMachine
             &SampleSM::s1_exit,
             &SampleSM::s1_invoke
         };
-        s1_.SetParent(&s0_);
-        s1_.SetAction(&action_1);
+        auto s1 = std::make_shared<StateImpl<SampleSM>>(s0, action_1);
 
         /// configure state2 as sub-state of state0.
         StateImpl<SampleSM>::StateAction action_2 = {
@@ -153,8 +159,7 @@ class SampleSM : public StateMachine
             &SampleSM::s2_exit,
             &SampleSM::s2_invoke
         };
-        s2_.SetParent(&s0_);
-        s2_.SetAction(&action_2);
+        auto s2 = std::make_shared<StateImpl<SampleSM>>(s0, action_2);
 
         /// configure state3 as sub-state of state0.
         StateImpl<SampleSM>::StateAction action_3 = {
@@ -162,8 +167,11 @@ class SampleSM : public StateMachine
             &SampleSM::s3_exit,
             &SampleSM::s3_invoke
         };
-        s3_.SetParent(&s0_);
-        s3_.SetAction(&action_3);
+        auto s3 = std::make_shared<StateImpl<SampleSM>>(s0, action_3);
+
+        /// configure initial transition to state1.
+        /// no condition transition
+        auto trans_1 = std::make_shared<InitTransition>(s1);
 
         /// configure transition form state1 to state2.
         /// trigger: event1
@@ -173,31 +181,33 @@ class SampleSM : public StateMachine
             .effect = &SampleSM::s1_trans_to_s2_effect,
             .triggered = &SampleSM::s1_trans_to_s2_triggered
         };
-        std::shared_ptr<TransitionImpl<SampleSM>> trans_1_2(
-            new TransitionImpl<SampleSM>(&s1_, &s2_, trans_1_to_2_act));
-        s1_.AddTransition(trans_1_2);
+        auto trans_1_2 = std::make_shared<TransitionImpl<SampleSM>>(s1, s2, trans_1_to_2_act);
 
         /// configure transition form state2 to state3.
         /// trigger: event2
         /// guard: no guard
         TransitionImpl<SampleSM>::TransAction trans_2_to_3_act = {
-            .guard = nullptr,
             .effect = &SampleSM::s2_trans_to_s3_effect,
             .triggered = &SampleSM::s2_trans_to_s3_triggered
         };
-        std::shared_ptr<TransitionImpl<SampleSM>> trans_2_3(
-            new TransitionImpl<SampleSM>(&s2_, &s3_, trans_2_to_3_act));
-        s2_.AddTransition(trans_2_3);
+        auto trans_2_3 = std::make_shared<TransitionImpl<SampleSM>>(s2, s3, trans_2_to_3_act);
 
+        /// configure transition form state3 to exit.
+        /// trigger: event3
+        /// guard: no guard
+        TransitionImpl<SampleSM>::TransAction trans_3_to_null_act = {
+            .triggered = &SampleSM::s3_trans_to_null_triggered
+        };
+        auto trans_3 = std::make_shared<TransitionImpl<SampleSM>>(s3, nullptr, trans_3_to_null_act);
+        AddTransition(trans_1);
+        AddTransition(trans_1_2);
+        AddTransition(trans_2_3);
+        AddTransition(trans_3);
         /// set state1 as initial state
-        Start(&s1_);
+        Start();
     }
 
   private:
-    StateImpl<SampleSM> s0_;
-    StateImpl<SampleSM> s1_;
-    StateImpl<SampleSM> s2_;
-    StateImpl<SampleSM> s3_;
     bool s1_to_s2_guard_ = false;
 };
 
@@ -223,12 +233,16 @@ int main(int argc, char **argv)
 {
     SampleSM sm;
 
+    SpEvent evt0(new SampleEvent(0, "event0", EvtPriority::kEvtPriMid));
     SpEvent evt1(new SampleEvent(1, "event1", EvtPriority::kEvtPriMid));
     SpEvent evt2(new SampleEvent(2, "event2", EvtPriority::kEvtPriMid));
     SpEvent evt3(new SampleEvent(3, "event3", EvtPriority::kEvtPriMid));
 
     /// enter initial state(1)
     sm.Setup();
+
+    /// invoke event(0) on state(1) and state(0)
+    sm.SendEvent(evt0);
 
     /// triggered transiton from state(1) to state(2)
     /// but failed due to guard is false
@@ -241,7 +255,7 @@ int main(int argc, char **argv)
     /// triggered transiton from state(2) to state(3)
     sm.SendEvent(evt2);
 
-    /// invoke event(3) on state(3)
+    /// exit state(3)
     sm.SendEvent(evt3);
 
     while(1)

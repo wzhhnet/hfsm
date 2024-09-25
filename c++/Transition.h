@@ -21,6 +21,8 @@
 #ifndef _HFSM_CPP_TRANSITION_H
 #define _HFSM_CPP_TRANSITION_H
 
+#include "State.h"
+
 namespace utils {
 namespace hfsm {
 
@@ -31,24 +33,63 @@ class Transition
   friend StateMachine;
 
   public:
-    Transition(State *source, State *target);
+    Transition(const SpState &source, const SpState &target);
     virtual ~Transition();
+    bool operator==(const Transition& other) const;
+    SpState Source() const;
+    SpState Target() const;
 
   protected:
+    /**
+     * @brief condition of this transition.
+     *
+     * @param[in] base class of state machine.
+     * @return ture if activated.
+     */
     virtual bool Guard(StateMachine *sm) = 0;
+    /**
+     * @brief Action after transistion
+     *
+     * @param[in] Base class of state machine.
+     * @return none
+     */
     virtual void Effect(StateMachine *sm) = 0;
+    /**
+     * @brief check if this transition will be activated.
+     *
+     * @param[in] evt: input event
+     * @param[in] sm: base class of state machine.
+     * @return true if event triggered this transtion.
+     */
     virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) = 0;
 
   private:
-    State* Transit(StateMachine *sm);
+    SpState Transit(StateMachine *sm);
 
   private:
-    State *src_;
-    State *tar_;
+    SpState src_;
+    SpState tar_;
 };
 
 using SpTrans = std::shared_ptr<Transition>;
-using TransSet = std::vector<SpTrans>;
+using TransList = std::list<SpTrans>;
+
+/// Initial transition used to transit to initial state.
+class InitTransition : public Transition
+{
+  public:
+    static const uint32_t INIT_EVT_ID = 0xF0F0F0F0;
+    InitTransition(const SpState &target)
+        : Transition(nullptr, target) {}
+    virtual ~InitTransition() {}
+
+  private:
+    virtual bool Guard(StateMachine *sm) override { return true; }
+    virtual void Effect(StateMachine *sm) override {}
+    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) override {
+        return evt->ID() == INIT_EVT_ID;
+    }
+};
 
 template <typename SM>
 class TransitionImpl final : public Transition
@@ -64,7 +105,7 @@ class TransitionImpl final : public Transition
     };
 
   public:
-    TransitionImpl(State *source, State *target, TransAction &action);
+    TransitionImpl(const SpState &source, const SpState &target, TransAction &action);
     virtual ~TransitionImpl();
 
   protected:
@@ -77,7 +118,7 @@ class TransitionImpl final : public Transition
 };
 
 template <typename SM>
-TransitionImpl<SM>::TransitionImpl(State *source, State *target, TransAction &action)
+TransitionImpl<SM>::TransitionImpl(const SpState &source, const SpState &target, TransAction &action)
   : Transition(source, target), action_(action)
 {
 }
@@ -115,8 +156,8 @@ bool TransitionImpl<SM>::EventTriggered(const SpEvent &evt, StateMachine *sm)
 }
 
 
-};
-};
+}
+}
 
 #endif // _HFSM_CPP_TRANSITION_H
 

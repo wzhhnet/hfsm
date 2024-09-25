@@ -21,13 +21,14 @@
 #ifndef _CPP_STATE_H
 #define _CPP_STATE_H
 
-#include "Transition.h"
-
 namespace utils {
 namespace hfsm {
 
-//class Transition;
+class State;
+class Transition;
 class StateMachine;
+using SpState = std::shared_ptr<State>;
+
 /// Abstract basic class for state
 class State
 {
@@ -37,12 +38,11 @@ class State
   public:
     /// Constructor
     State() {}
-    State(State *parent) : parent_(parent) {}
+    State(const SpState &parent) : parent_(parent) {}
     /// Deconstructor
     virtual ~State() {}
-    void SetParent(State* parent) { parent_ = parent; }
-    State* Parent() { return parent_; }
-    void AddTransition(SpTrans trans) { trans_.push_back(trans); }
+    void SetParent(const SpState &parent) { parent_ = parent; }
+    const SpState& Parent() const { return parent_; }
 
   protected:
     /**
@@ -76,17 +76,7 @@ class State
     virtual bool Invoke(const SpEvent &evt, StateMachine *sm) = 0;
 
   private:
-    /**
-     * @brief Get all transitions which source as this state.
-     *       called by state-machine
-     *
-     * @return reference of transition container.
-     */
-    const TransSet& GetTransitions() const { return trans_; }
-
-  private:
-    State *parent_ = nullptr;
-    TransSet trans_;
+    SpState parent_;
 };
 
 template <typename SM>
@@ -104,12 +94,12 @@ class StateImpl final : public State
   public:
     /// Constructor
     StateImpl();
-    StateImpl(State *parent);
     StateImpl(StateAction &action);
-    StateImpl(State *parent, StateAction &action);
+    StateImpl(const SpState &parent);
+    StateImpl(const SpState &parent, const StateAction &action);
     /// Deconstructor
     virtual ~StateImpl();
-    void SetAction(const StateAction *action);
+    void SetAction(const StateAction &action);
 
   protected:
     virtual void Entry(StateMachine *sm) override;
@@ -124,23 +114,22 @@ template <typename SM>
 StateImpl<SM>::StateImpl() {}
 
 template <typename SM>
-StateImpl<SM>::StateImpl(State *parent) : State(parent) {}
-
-template <typename SM>
 StateImpl<SM>::StateImpl(StateAction &action) : action_(action) {}
 
 template <typename SM>
-StateImpl<SM>::StateImpl(State *parent, StateAction &action)
+StateImpl<SM>::StateImpl(const SpState &parent) : State(parent) {}
+
+template <typename SM>
+StateImpl<SM>::StateImpl(const SpState &parent, const StateAction &action)
   : State(parent), action_(action) {}
 
 template <typename SM>
 StateImpl<SM>::~StateImpl() {}
 
 template <typename SM>
-void StateImpl<SM>::SetAction(const StateAction *action)
+void StateImpl<SM>::SetAction(const StateAction &action)
 {
-    if (action)
-        action_ = *action;
+    action_ = action;
 }
 
 template <typename SM>
@@ -171,10 +160,8 @@ bool StateImpl<SM>::Invoke(const SpEvent &evt, StateMachine *sm)
     return false;
 }
 
-using SpState = std::shared_ptr<State>;
-
-};
-};
+}
+}
 
 #endif // _CPP_STATE_H
 
