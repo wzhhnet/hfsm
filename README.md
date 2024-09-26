@@ -3,4 +3,4 @@ Hierarchical Finite State Machine (HFSM) is a design pattern used to create a st
 
 This project implemented a simple HFSM library for complex states management.
 # C++ Class Diagram
-![class diagram](c++/class_hfsm.png)
+![class diagram](https://github.com/wzhhnet/hfsm/c++/class_hfsm.png)
