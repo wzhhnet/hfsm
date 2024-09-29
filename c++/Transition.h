@@ -27,7 +27,12 @@ namespace utils {
 namespace hfsm {
 
 class State;
+class Transition;
 class StateMachine;
+
+using SpTrans = std::shared_ptr<Transition>;
+using TransList = std::list<SpTrans>;
+
 class Transition
 {
   friend StateMachine;
@@ -36,17 +41,41 @@ class Transition
     Transition(const SpState &source, const SpState &target);
     virtual ~Transition();
     bool operator==(const Transition& other) const;
+    /**
+     * @brief get source state of transition.
+     *
+     * @param none.
+     * @return source state.
+     */
     SpState Source() const;
+    /**
+     * @brief get destination state of transition.
+     *
+     * @param none.
+     * @return destination state.
+     */
     SpState Target() const;
+
+  public:
+    /**
+     * @brief create initial transition.
+     *        first transition that is from null to targit
+     *        must be add to SM
+     *
+     * @param target[in] target initially transit to.
+     * @return transition.
+     */
+    static SpTrans CreateInitialTransition(const SpState &target);
 
   protected:
     /**
-     * @brief condition of this transition.
+     * @brief as a condition of transition activated.
+     *        guard should be optional condition
      *
      * @param[in] base class of state machine.
      * @return ture if activated.
      */
-    virtual bool Guard(StateMachine *sm) = 0;
+    virtual bool Guard(StateMachine *sm) { return true; };
     /**
      * @brief Action after transistion
      *
@@ -55,42 +84,24 @@ class Transition
      */
     virtual void Effect(StateMachine *sm) = 0;
     /**
-     * @brief check if this transition will be activated.
+     * @brief the event triggers this transition or not.
      *
      * @param[in] evt: input event
      * @param[in] sm: base class of state machine.
      * @return true if event triggered this transtion.
      */
-    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) = 0;
+    virtual bool Triggered(const SpEvent &evt, StateMachine *sm) = 0;
 
   private:
     SpState Transit(StateMachine *sm);
+    static SpEvent CreateInitialEvent();
 
   private:
     SpState src_;
     SpState tar_;
 };
 
-using SpTrans = std::shared_ptr<Transition>;
-using TransList = std::list<SpTrans>;
-
-/// Initial transition used to transit to initial state.
-class InitTransition : public Transition
-{
-  public:
-    static const uint32_t INIT_EVT_ID = 0xF0F0F0F0;
-    InitTransition(const SpState &target)
-        : Transition(nullptr, target) {}
-    virtual ~InitTransition() {}
-
-  private:
-    virtual bool Guard(StateMachine *sm) override { return true; }
-    virtual void Effect(StateMachine *sm) override {}
-    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) override {
-        return evt->ID() == INIT_EVT_ID;
-    }
-};
-
+/// Transition template that can bind actions of transition to derived class of SM
 template <typename SM>
 class TransitionImpl final : public Transition
 {
@@ -111,7 +122,7 @@ class TransitionImpl final : public Transition
   protected:
     virtual bool Guard(StateMachine *sm) override;
     virtual void Effect(StateMachine *sm) override;
-    virtual bool EventTriggered(const SpEvent &evt, StateMachine *sm) override;
+    virtual bool Triggered(const SpEvent &evt, StateMachine *sm) override;
 
   private:
     TransAction action_ = {};
@@ -146,7 +157,7 @@ void TransitionImpl<SM>::Effect(StateMachine *sm)
 }
 
 template <typename SM>
-bool TransitionImpl<SM>::EventTriggered(const SpEvent &evt, StateMachine *sm)
+bool TransitionImpl<SM>::Triggered(const SpEvent &evt, StateMachine *sm)
 {
     if (action_.triggered) {
         SM *obj = dynamic_cast<SM*>(sm);
@@ -154,7 +165,6 @@ bool TransitionImpl<SM>::EventTriggered(const SpEvent &evt, StateMachine *sm)
     }
     return false;
 }
-
 
 }
 }

@@ -24,6 +24,7 @@
 
 #include <set>
 #include <list>
+#include <atomic>
 #include <functional>
 #include <EventHub.h>
 
@@ -33,14 +34,26 @@
 namespace utils {
 namespace hfsm {
 
-/// The sequence of State machine run-time:
+/// All state objects will be hold by transition,
+/// and all transition objects will be hold by State Machine
+
+/// Initial transition which is transiting from initial to a state,
+/// must be created by Transition::CreateInitialTransition and it
+/// must be add to State Machine.
+
+/// If a transition is activated that is from a state to null state,
+/// then State Machine reached final state, and all transition objects
+/// will be released by SM, SM will stop running. you could add
+/// new transitions object to State Machine and restart it again.
+
+/// The classic run-time sequence of State Machine as below:
 ///
 /// State: S0, S1, S2 (S1 and S2 are both sub-states of S0)
 /// Event: E1
 /// Transition: T1
 ///
 /// Scenario 1: current state transit from S1 to S2 via T1 triggered by E1.
-/// 1, T1->EventTriggered
+/// 1, T1->Triggered
 /// 2, T1->Guard
 /// Below is continue if transition is occerred.
 /// 3, S1->Exit
@@ -51,7 +64,7 @@ namespace hfsm {
 ///
 /// Scenario 2: current state transit from S1 to S1 (self-transition)
 /// 1, S1->Invoke
-/// 2, T1->EventTriggered
+/// 2, T1->Triggered
 /// 3, T1->Guard
 /// Below is continue if transition is occerred.
 /// 4, T1->Effect
@@ -91,13 +104,13 @@ class StateMachine : public EventHandler
     virtual void OnEvent(const SpEvent evt) override final;
 
   private:
-    bool TransTriggered(const SpEvent &evt);
+    bool TransActivated(const SpEvent &evt);
 
   private:
     const size_t  MAX_EVENT_NUM = 64;
     std::unique_ptr<EventHub> evt_hub_;
     SpState cur_state_ = nullptr;
-    bool running_ = false;
+    std::atomic<bool> running_{false};
     TransList trans_list_;
 
   private:

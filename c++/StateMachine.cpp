@@ -27,26 +27,6 @@
 namespace utils {
 namespace hfsm {
 
-/// System event used to start HFSM.
-class StartEvent : public Event
-{
-  public:
-    StartEvent() {}
-    virtual ~StartEvent() {}
-    virtual uint32_t ID() const {
-        return InitTransition::INIT_EVT_ID;
-    }
-    virtual const char* Name() const {
-        return NAME;
-    }
-    virtual EvtPriority Priority() const {
-        return EvtPriority::kEvtPriHigh;
-    }
-
-  private:
-    const char *NAME = "StartEvent";
-};
-
 /// Constructor
 StateMachine::StateMachine()
 {
@@ -60,17 +40,18 @@ StateMachine::~StateMachine()
 void StateMachine::Start()
 {
     if (running_) {
-        LOGE("%s SM is running", __func__);
+        LOGE("%s failed: SM is running!", __func__);
         return;
     }
+    running_ = true;
     evt_hub_.reset(new EventHub(this, MAX_EVENT_NUM));
-    evt_hub_->Send(SpEvent(new StartEvent()));
+    evt_hub_->Send(Transition::CreateInitialEvent());
 }
 
 bool StateMachine::AddTransition(const SpTrans &trans)
 {
     if (running_) {
-        LOGE("%s SM is running", __func__);
+        LOGE("%s failed: SM is running!", __func__);
         return false;
     }
     auto it = std::find_if(trans_list_.begin(), trans_list_.end(),
@@ -88,13 +69,11 @@ bool StateMachine::AddTransition(const SpTrans &trans)
 void StateMachine::OnEvent(const SpEvent evt)
 {
     if (evt == nullptr) return;
-    if (TransTriggered(evt)) {
+    if (TransActivated(evt)) {
         /// Transition occerred
         if (!cur_state_) {
             trans_list_.clear();
             running_ = false;
-        } else {
-            running_ = true;
         }
     } else {
         /// Invoke event on current state and parents.
@@ -106,14 +85,14 @@ void StateMachine::OnEvent(const SpEvent evt)
     }
 }
 
-bool StateMachine::TransTriggered(const SpEvent &evt)
+bool StateMachine::TransActivated(const SpEvent &evt)
 {
     /// Check if transition is happened on currrent state.
     /// An event can trigger only one transition.
     for (const auto &trans : trans_list_) {
         /// Check transition(source, trigger and guard)
         if (cur_state_ == trans->Source()
-            && trans->EventTriggered(evt, this)
+            && trans->Triggered(evt, this)
             && trans->Guard(this)) {
             /// Transition happened
             cur_state_ = trans->Transit(this);

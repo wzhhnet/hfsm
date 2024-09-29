@@ -171,7 +171,7 @@ class SampleSM : public StateMachine
 
         /// configure initial transition to state1.
         /// no condition transition
-        auto trans_1 = std::make_shared<InitTransition>(s1);
+        auto trans_1 = Transition::CreateInitialTransition(s1);
 
         /// configure transition form state1 to state2.
         /// trigger: event1

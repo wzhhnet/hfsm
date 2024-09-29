@@ -29,6 +29,41 @@
 namespace utils {
 namespace hfsm {
 
+/// System event used to first transiton
+class InitEvent : public Event
+{
+  public:
+    static const uint32_t INIT_EVT_ID = 0xF0F0F0F0;
+
+  public:
+    InitEvent() {}
+    virtual ~InitEvent() {}
+    virtual uint32_t ID() const {
+        return INIT_EVT_ID;
+    }
+    virtual const char* Name() const {
+        return "InitEvent";
+    }
+    virtual EvtPriority Priority() const {
+        return EvtPriority::kEvtPriHigh;
+    }
+};
+
+/// Initial transition used to transit to initial state.
+class InitTransition : public Transition
+{
+  public:
+    InitTransition(const SpState &target)
+      : Transition(nullptr, target) {}
+    virtual ~InitTransition() {}
+
+  private:
+    virtual void Effect(StateMachine *sm) override final {}
+    virtual bool Triggered(const SpEvent &evt, StateMachine *sm) override final {
+        return (evt->ID() == InitEvent::INIT_EVT_ID);
+    }
+};
+
 Transition::Transition(const SpState &source, const SpState &target)
   : src_(source), tar_(target)
 {
@@ -52,6 +87,16 @@ SpState Transition::Source() const
 SpState Transition::Target() const
 {
     return tar_;
+}
+
+SpTrans Transition::CreateInitialTransition(const SpState &target)
+{
+    return SpTrans(new InitTransition(target));
+}
+
+SpEvent Transition::CreateInitialEvent()
+{
+    return SpEvent(new InitEvent());
 }
 
 SpState Transition::Transit(StateMachine *sm)

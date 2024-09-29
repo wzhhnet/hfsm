@@ -79,6 +79,7 @@ class State
     SpState parent_;
 };
 
+/// State template that can bind actions of state to derived class of SM
 template <typename SM>
 class StateImpl final : public State
 {
