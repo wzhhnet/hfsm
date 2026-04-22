@@ -21,6 +21,10 @@
 #ifndef _HFSM_LOG_H
 #define _HFSM_LOG_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef LOG_TAG
 #define LOG_TAG "hfsm"
 #endif
@@ -42,6 +46,10 @@ void hfsm_trace(const char *format, ...);
 #define LOGE_IF(condition, ...) do { if (condition) {  (void)LOGE(__VA_ARGS__); } }while(0)
 
 #define ASSERT(condition)   LOGE_IF(!(condition), "assert failed at: %s() @line %d", __FUNCTION__, __LINE__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*! _HFSM_LOG_H */
 

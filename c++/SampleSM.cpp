@@ -21,6 +21,8 @@
 
 #include <unistd.h>
 #include <stdarg.h>
+#include <cstdio>
+#include <string>
 
 #include "log.h"
 #include "StateMachine.h"
