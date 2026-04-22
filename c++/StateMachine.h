@@ -78,12 +78,13 @@ class StateMachine : public EventHandler
     virtual ~StateMachine();
     /**
      * @brief Start SM with initial state
-     *        "INIT_EVT_ID" will be activited internally
      *
-     * @param None.
+     * @param[in] evthub: event hub object
+     *    if evthub is null, SM will create an internal event hub,
+     *    and "SendEvent" method will be valid.
      * @return None.
      */
-    void Start();
+    void Start(EventHub* evthub = nullptr);
     /**
      * @brief  Add transition to SM
      *         Do not call this on SM running

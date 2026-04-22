@@ -37,15 +37,18 @@ StateMachine::~StateMachine()
 {
 }
 
-void StateMachine::Start()
+void StateMachine::Start(EventHub* evthub)
 {
     if (running_) {
         LOGE("%s failed: SM is running!", __func__);
         return;
     }
+    if (evthub) {
+        evthub->Subscribe(this);
+    } else {
+        evt_hub_.reset(new EventHub(this, MAX_EVENT_NUM));
+    }
     running_ = true;
-    evt_hub_.reset(new EventHub(this, MAX_EVENT_NUM));
-    evt_hub_->Send(Transition::CreateInitialEvent());
 }
 
 bool StateMachine::AddTransition(const SpTrans &trans)

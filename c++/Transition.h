@@ -94,7 +94,6 @@ class Transition
 
   private:
     SpState Transit(StateMachine *sm);
-    static SpEvent CreateInitialEvent();
 
   private:
     SpState src_;

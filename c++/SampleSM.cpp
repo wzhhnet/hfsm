@@ -35,7 +35,7 @@ using namespace hfsm;
 ///   ------       |             |              |
 ///                |             |              |
 ///             ------         ------         ------
-///            |  S1  |--E1-->|  S2  |--E2-->|  S3  |
+/// Init--E0-->|  S1  |--E1-->|  S2  |--E2-->|  S3  |--E3-->Exit
 ///             ------         ------         ------
 
 class SampleSM : public StateMachine
@@ -59,6 +59,13 @@ class SampleSM : public StateMachine
         return true;
     }
 
+    bool init_trans_triggered(const SpEvent &evt) {
+        if (evt->ID() == 0) {
+            LOGD("%s() trigger evt = %s", __FUNCTION__, evt->Name());
+            return true;
+        }
+        return false;
+    }
     void s1_enter()
     {
         LOGD("%s()", __FUNCTION__);
@@ -173,7 +180,11 @@ class SampleSM : public StateMachine
 
         /// configure initial transition to state1.
         /// no condition transition
-        auto trans_1 = Transition::CreateInitialTransition(s1);
+        //auto trans_1 = Transition::CreateInitialTransition(s1);
+        TransitionImpl<SampleSM>::TransAction trans_null_to_1_act = {
+            .triggered = &SampleSM::init_trans_triggered
+        };
+        auto trans_1 = std::make_shared<TransitionImpl<SampleSM>>(nullptr, s1, trans_null_to_1_act);
 
         /// configure transition form state1 to state2.
         /// trigger: event1
