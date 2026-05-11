@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.4)
 
 project(hfsm
   LANGUAGES C CXX
@@ -13,19 +13,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 set(SRC_PATH ${PROJECT_SOURCE_DIR})
-
 include_directories(
+	evthub/inc
 	${SRC_PATH}/inc
-	${SRC_PATH}/src/inc
-	${SRC_PATH}/src/log
-	${SRC_PATH}/src/mq
+	${SRC_PATH}/src
 )
-
-file (GLOB SRC_LIBS
-	./src/*.c
-	./src/log/*.c
-	./src/mq/*.c
-)
+aux_source_directory(./src SRC_LIBS)
 
 if (TEST)
 include_directories(src)
@@ -48,7 +41,9 @@ target_link_libraries(${SHARED_LIB_NAME} LINK_PUBLIC -lpthread)
 set_target_properties(${STATIC_LIB_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 set_target_properties(${SHARED_LIB_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME})
 
+add_subdirectory(evthub)
+add_subdirectory(c++)
 if (TEST)
 add_executable(${TEST_EXEC_NAME} ${TEST_SRCS} ${GTEST_SRCS})
-target_link_libraries(${TEST_EXEC_NAME} LINK_PUBLIC ${STATIC_LIB_NAME} gtest)
+target_link_libraries(${TEST_EXEC_NAME} LINK_PUBLIC ${STATIC_LIB_NAME} gtest evthub)
 endif ()

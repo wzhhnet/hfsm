@@ -50,11 +50,10 @@ typedef struct {
   *
   *    create HFSM
   *    @param[in]  param: attribute of HFSM
-  *    @param[in]  hub: msg hub for HFSM event processiing
   *    @param[out] hfsm: point of FHSM handle
   *    @return     0 success, non-zero error code
   */
-int hfsm_create(hfsm_handle *hfsm, hfsm_param *param, hub_t *hub);
+int hfsm_create(hfsm_handle *hfsm, hfsm_param *param);
 
 /**
   *    @brief destroy HFSM
@@ -73,7 +72,7 @@ int hfsm_destroy(hfsm_handle *hfsm);
   *    @param[in]  id initial state identifier
   *    @return     0 success, non-zero error code
   */
-int hfsm_start(hfsm_handle hfsm, state_id_t id);
+int hfsm_start(hfsm_handle hfsm, state_id id);
 
 /**
   *    @brief add state
@@ -85,6 +84,16 @@ int hfsm_start(hfsm_handle hfsm, state_id_t id);
   *    @return     0 success, non-zero error code
   */
 int hfsm_add_state(hfsm_handle hfsm, state_t *s);
+
+/**
+  *    @brief send an asynchronous message
+  *
+  *    send an asynchronous message to HFSM
+  *    @param[in]  hfsm: point of FHSM handle
+  *    @param[in]  msg: message point to send
+  *    @return     0 success, non-zero error code
+  */
+int hfsm_send_event(hfsm_handle hfsm, event_t *e);
 
 /**
   *    @brief allocate a new state by HFSM
