@@ -6,7 +6,6 @@ project(hfsm
 )
 
 option(TEST "building test code" OFF)
-option(SAMPLE "building sample code" OFF)
 
 set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
@@ -17,15 +16,9 @@ set(SRC_PATH ${PROJECT_SOURCE_DIR})
 include_directories(
 	${SRC_PATH}/inc
 	${SRC_PATH}/src/inc
-	${SRC_PATH}/src/log
-	${SRC_PATH}/src/mq
 )
 
-file (GLOB SRC_LIBS
-	./src/*.c
-	./src/log/*.c
-	./src/mq/*.c
-)
+aux_source_directory(./src SRC_LIBS)
 
 if (TEST)
 include_directories(src)
